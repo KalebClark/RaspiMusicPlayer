@@ -11,6 +11,8 @@ My addition is code to read the buttons and switches and control the standard vo
 - [Enable SSH](https://volumio.github.io/docs/User_Manual/SSH.html)
 - [Configure](https://volumio.org/raspberry-pi-display-and-volumio-touchscreen-music-player/) the [Official Raspberry Pi Display](https://www.element14.com/community/docs/DOC-78156/l/raspberry-pi-7-touchscreen-display)
 
+Note on configuring the display: Do not change the volumio password before you install. Volumio requires that the password be ```volumio``` to install. It is hardcoreded in their install scripts.
+
 ```bash
 pip install foobar
 ```
