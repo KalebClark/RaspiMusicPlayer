@@ -13,6 +13,17 @@ My addition is code to read the buttons and switches and control the standard vo
 
 Note on configuring the display: Do not change the volumio password before you install. Volumio requires that the password be ```volumio``` to install. It is hardcoreded in their install scripts.
 
+### Python & Python Modules
+This turned out to be a pain, needs python version > 3.5 which introduced a bunch of issues installing. Its doable, but not straight forward or easy. I used pyenv to get the right version, then satisfied dependencies as they came up with module installation. Once you have ver > 3.5 installed then proceed.
+- numpy
+
+### Enable SPI
+- Run ```sudo apt-get install raspi-config``` to install the raspi-config tool.
+- run ```raspi-config```
+- Select "Interfacing options"
+- Select "Enable SPI"
+- Reboot
+
 ```bash
 pip install foobar
 ```
