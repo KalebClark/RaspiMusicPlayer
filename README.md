@@ -30,7 +30,8 @@ export CPPFLAGS="-I/usr/local/include -I/usr/local/include/openssl"
 - RPI.GPIO
 - adafruit-blinka
 - requests
-- 
+- adafruit-circuitpython-mcp3xxx
+- adafruit-circuitpython-cap1188
 
 ### Enable SPI
 - Run ``` sudo apt-get update```
