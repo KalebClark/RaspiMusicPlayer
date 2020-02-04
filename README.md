@@ -17,7 +17,20 @@ Note on configuring the display: Do not change the volumio password before you i
 This turned out to be a pain, needs python version > 3.5 which introduced a bunch of issues installing. Its doable, but not straight forward or easy. I used pyenv to get the right version, then satisfied dependencies as they came up with module installation. Once you have ver > 3.5 installed then proceed.
 
 Easiest way to do this is with pyenv. Check [here for details](https://realpython.com/intro-to-pyenv).
+
+Also compile openssl from source and set flags like this:
+```
+export LDFLAGS="-L/usr/local/lib/"
+export LD_LIBRARY_PATH="/usr/local/lib/"
+export CPPFLAGS="-I/usr/local/include -I/usr/local/include/openssl"
+```
+
+#### Required Modules
 - numpy
+- RPI.GPIO
+- adafruit-blinka
+- requests
+- 
 
 ### Enable SPI
 - Run ``` sudo apt-get update```
