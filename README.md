@@ -18,10 +18,13 @@ This turned out to be a pain, needs python version > 3.5 which introduced a bunc
 - numpy
 
 ### Enable SPI
+- Run ``` sudo apt-get update```
 - Run ```sudo apt-get install raspi-config``` to install the raspi-config tool.
 - run ```raspi-config```
 - Select "Interfacing options"
 - Select "Enable SPI"
+- Select "Interfacing Options"
+- Select "Enable i2c"
 - Reboot
 
 ```bash
