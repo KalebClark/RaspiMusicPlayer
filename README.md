@@ -15,6 +15,8 @@ Note on configuring the display: Do not change the volumio password before you i
 
 ### Python & Python Modules
 This turned out to be a pain, needs python version > 3.5 which introduced a bunch of issues installing. Its doable, but not straight forward or easy. I used pyenv to get the right version, then satisfied dependencies as they came up with module installation. Once you have ver > 3.5 installed then proceed.
+
+Easiest way to do this is with pyenv. Check [here for details](https://realpython.com/intro-to-pyenv).
 - numpy
 
 ### Enable SPI
