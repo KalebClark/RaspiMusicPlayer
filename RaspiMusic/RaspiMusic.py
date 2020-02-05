@@ -1,4 +1,6 @@
+import os
 import json
+import time
 import board
 import busio
 import logging
@@ -25,6 +27,9 @@ class RaspiMusic:
         self.vol_real_range = [100, 0]
         self.bouncetime = 500
         self.dim_amount = 50
+        self.xsetRun = False
+        self.seekRun = 0
+        self.seeking = False
         self.vstate = {
             'status': None,
             'seek': 0,
@@ -56,7 +61,7 @@ class RaspiMusic:
         GPIO.setup(self.pin_in2, GPIO.OUT)
         GPIO.setup(self.pin_pwm, GPIO.OUT)
         GPIO.setup(self.pin_en, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.pin_pwm, 2000)
+        self.pwm = GPIO.PWM(self.pin_pwm, 100)
         self.pwm.start(45)
         GPIO.output(self.pin_en, GPIO.HIGH)
         #self.motorSet(53)
@@ -111,6 +116,7 @@ class RaspiMusic:
     def btn_playpause(self, channel):
         print("Play / Pause")
         self.sendApiCmd("toggle")
+        self.displayOn()
 
     def btn_next(self, channel):
         print("Next")
@@ -120,14 +126,33 @@ class RaspiMusic:
         print("Random")
         self.sendApiCmd("random", True)
 
+    # SEek Song
+    ###########################################################################
+    def seekSong(self, song_len, seek):
+        if self.seeking:
+            return
+
+        song_len = (song_len * 1000)
+        song_seek = (song_len * (seek/100))
+        cmd =  "mpc seek "+ str(seek) + "%"
+        os.system(cmd)
+        self.seeking = True
+        # self.seekRun = 1
+        print("Command: %s" % (cmd))
+        #print("SongLen: {%d}, Seek: {%d}" % (song_len, song_seek))
+
     def motorLeft(self):
         GPIO.output(self.pin_in1, False)
         GPIO.output(self.pin_in2, True)
+        time.sleep(.25)
+        self.motorOff()
         #GPIO.output(self.pin_en, True)
 
     def motorRight(self):
         GPIO.output(self.pin_in1, True)
         GPIO.output(self.pin_in2, False)
+        time.sleep(.25)
+        self.motorOff()
         #GPIO.output(self.pin_en, True)
 
     def motorOff(self):
@@ -140,6 +165,7 @@ class RaspiMusic:
 
     def fadeTouch(self):
         if self.cap[1].value:
+            self.displayOn()
             return True
 
         return False
@@ -162,7 +188,7 @@ class RaspiMusic:
         if resp.status_code != 200:
             print("Error!!! This didnt happen: ", api_url)
 
-        logging.info("sendApiCmd: {} {}".format(api_url, resp.status_code))
+        #logging.info("sendApiCmd: {} {}".format(api_url, resp.status_code))
         return resp
 
     def setVolume(self, volume):
@@ -197,7 +223,7 @@ class RaspiMusic:
     def getVolumeKnob(self):
         vol_raw = AnalogIn(self.mcp, MCP.P0).value
         adjust_val = abs(vol_raw - self.last_raw_vol)
-        if adjust_val > 500:
+        if adjust_val > 650:
             vol = int(np.interp(vol_raw, self.vol_raw_range, self.vol_real_range))
             self.last_raw_vol = vol_raw
         else:
@@ -225,8 +251,19 @@ class RaspiMusic:
         self.vstate['random'] = data['random']
         self.vstate['repeat'] = data['repeat']
         self.vstate['volume'] = data['volume']
-        self.vstate['mute'] = data['mute']        
+        self.vstate['mute'] = data['mute'] 
+        self.xsetRun = False
+
+        # Seek counter
+        if self.seekRun > 0:
+            self.seekRun += 1
+
+        if self.seekRun >= 4:
+            self.seekRun = 0
+            self.seeking = False
+
         #print(state.json())
+        print("SeekRun: {%d}" % (self.seekRun))
 
     def getMuteSwitch(self):
         if GPIO.input(16) == GPIO.HIGH:
@@ -240,16 +277,24 @@ class RaspiMusic:
         else:
             return False
 
+    def displayOn(self):
+        if not self.xsetRun:
+            os.system("xset -display :0 s reset dpms force on")
+        self.xsetRun = True
+
+    # UPDATE
+    #####################################################
     def update(self):
         # Dim & Mute
         mute_switch = self.getMuteSwitch()
         dim_switch = self.getDimSwitch()
 
+        # Mute
         if mute_switch != self.vstate['mute']:
             self.tgl_mute()
 
+        # Dim
         if dim_switch != self.vstate['dim']:
-            print("FUUUUUCK DIM!")
             self.tgl_dim()
 
         # Volume
@@ -258,39 +303,59 @@ class RaspiMusic:
             if not self.vstate['dim']:
                 self.setVolume(vol)
 
-        # Get Fader Position
+        # Get Song & Fader Position
         fader_pos = self.getFaderPos()
-
-        # Get song Position
         song_pos = self.getSongPos()
+        diff = abs(song_pos - fader_pos)
+        #print("Diff: %d (%s)" % (diff, self.vstate['status']))
 
         # Turn off motor controller when touched.
-        if self.fadeTouch():
-            GPIO.output(self.pin_en, GPIO.LOW)
-        else:
-            GPIO.output(self.pin_en, GPIO.HIGH)
+        while self.fadeTouch():
+            time.sleep(.05)
+            self.seekRun = 1
+            print("Waiting...")
 
-        diff = abs(song_pos - fader_pos)        
-        
+        if self.seekRun > 1 and diff >= 10:
+            self.seekSong(self.vstate['duration'], fader_pos)
+
+        # - Best so far...
+        # if self.fadeTouch() and diff >= 10:
+        #     if self.seekRun == 0:
+        #         print("seeek")
+        #         self.seekSong(self.vstate['duration'], fader_pos)
+        #         self.seekRun =+ 1
+
+        # elif self.fadeTouch():
+        #     GPIO.output(self.pin_en, GPIO.LOW)
+        #     print("Touch")
+        # else:
+        #     GPIO.output(self.pin_en, GPIO.HIGH)
+
         # Set Speed
         if diff >= 10:
-            self.pwm.ChangeDutyCycle(90)
+            self.pwm.ChangeDutyCycle(65)
         else:
-            self.pwm.ChangeDutyCycle(50)
+            self.pwm.ChangeDutyCycle(20)
 
-        #if diff <= 10:
-        
-        print("vol: {%d/%d}, mute: {%r/%r}, dim: {%r/%r}, song_pos: {%d}, fader_pos: {%d} Difference: {%d}" % (
-            vol,
-            self.vstate['volume'],
-            mute_switch,
-            self.vstate['mute'],
-            dim_switch,
-            self.vstate['dim'],
-            song_pos,
-            fader_pos,
-            diff
-        ))
+        # Move the fader
+
+        if diff >= 3 and self.vstate['status'] == "play" and self.seekRun == 0:
+            if song_pos >= fader_pos:
+                self.motorRight()
+            elif song_pos <= fader_pos:
+                self.motorLeft()
+
+        # print("vol: {%d/%d}, mute: {%r/%r}, dim: {%r/%r}, song/fad: {%d/%d} Difference: {%d}" % (
+        #     vol,
+        #     self.vstate['volume'],
+        #     mute_switch,
+        #     self.vstate['mute'],
+        #     dim_switch,
+        #     self.vstate['dim'],
+        #     song_pos,
+        #     fader_pos,
+        #     diff
+        # ))
 
         return 
         # Set Speed 
@@ -299,11 +364,7 @@ class RaspiMusic:
         else:
             self.pwm.ChangeDutyCycle(55)
 
-        # Move the fader
-        if song_pos >= fader_pos:
-            self.motorRight()
-        elif song_pos <= fader_pos:
-            self.motorLeft()
+
 
         #self.motorLeft()
         #self.motorOff()
