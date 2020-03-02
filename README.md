@@ -5,6 +5,8 @@ Potentiometer for volume control and toggle switch for mute / dim. Powered by [V
 
 My addition is code to read the buttons and switches and control the standard volumio interface.
 
+[See the full video on the Element14 Comunnity](https://www.element14.com/community/docs/DOC-94601/l/episode-435-raspberry-pi-4-music-player-w-analog-controls)
+
 ## Installation
 
 - Follow the [normal install instructions](https://volumio.github.io/docs/User_Manual/Quick_Start_Guide) for [Volumio](volumio.org)
