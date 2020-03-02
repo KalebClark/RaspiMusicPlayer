@@ -26,7 +26,17 @@ export CPPFLAGS="-I/usr/local/include -I/usr/local/include/openssl"
 ```
 
 #### Required Modules
+- os
+- json
+- board
+- busio
+- requests
+- digitalio
 - numpy
+- logging
+- threading
+- sleep
+- time
 - RPI.GPIO
 - adafruit-blinka
 - requests
