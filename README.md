@@ -43,7 +43,7 @@ export CPPFLAGS="-I/usr/local/include -I/usr/local/include/openssl"
 - adafruit-circuitpython-mcp3xxx
 - adafruit-circuitpython-cap1188
 
-### Enable SPI
+### Enable SPI & I2C
 - Run ``` sudo apt-get update```
 - Run ```sudo apt-get install raspi-config``` to install the raspi-config tool.
 - run ```raspi-config```
@@ -52,10 +52,6 @@ export CPPFLAGS="-I/usr/local/include -I/usr/local/include/openssl"
 - Select "Interfacing Options"
 - Select "Enable i2c"
 - Reboot
-
-```bash
-pip install foobar
-```
 
 ## Usage
 ``` python io_test.py```
