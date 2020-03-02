@@ -12,10 +12,14 @@ import adafruit_mcp3xxx.mcp3008 as MCP
 from adafruit_cap1188.i2c import CAP1188_I2C
 from adafruit_mcp3xxx.analog_in import AnalogIn
 
+## Setup logging
 format = "%(name)s(%(levelname)s): %(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO, datefmt="%H:%M:%S")
 
-
+# RaspiMusic Class
+# This class handles all IO with the hardware, as well as communications
+# with volumio. By REST API and command line mpc for seeking since volumio
+# REST API does not have an endpoint for this.
 class RaspiMusic:
     def __init__(self):
         self.host = "localhost"
@@ -44,7 +48,7 @@ class RaspiMusic:
         # Setup CAP1188 Board
         self.i2c = busio.I2C(board.SCL, board.SDA)
         self.cap = CAP1188_I2C(self.i2c)
-        self.cap._write_register(0x1F, 108)
+        self.cap._write_register(0x1F, 65)
 
         # Setup MCP3008
         self.mcp = MCP.MCP3008(
@@ -64,9 +68,9 @@ class RaspiMusic:
         self.pwm = GPIO.PWM(self.pin_pwm, 100)
         self.pwm.start(45)
         GPIO.output(self.pin_en, GPIO.HIGH)
-        #self.motorSet(53)
         self.motorOff()
 
+        # Setup buttons & Toggle Switch
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) # Toggle Dim
         GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) # Toggle Mute    
@@ -83,6 +87,14 @@ class RaspiMusic:
         GPIO.add_event_detect(5, GPIO.FALLING, callback=self.btn_next, bouncetime=self.bouncetime)
         GPIO.add_event_detect(6, GPIO.FALLING, callback=self.btn_random, bouncetime=self.bouncetime)
 
+    """
+        tgl_dim()
+
+        When toggle switch is detected to be thrown in this direction, it triggers
+        this method. 
+
+        Sets the vstate state and fires off the REST command
+    """
     def tgl_dim(self):
         cur_dim = self.vstate['dim']
         if cur_dim:
@@ -92,8 +104,17 @@ class RaspiMusic:
             self.vstate['dim'] = True
             new_vol = self.getDimAmount()
 
+        logging.info("Toggle: Dim " + str(int(new_vol)))
         self.sendApiCmd("volume", str(int(new_vol)))
 
+    """
+        tgl_mute()
+
+        When toggle switch is detected to be thrown in this direction, it triggers
+        this method.
+
+        Sets the vstate state and fires off the REST command.
+    """
     def tgl_mute(self):
         cur_mute = self.vstate['mute']
         if cur_mute:
@@ -103,31 +124,54 @@ class RaspiMusic:
             mute_cmd = 'mute'
             self.vstate['mute'] = True
 
+        logging.info("Toggle: Mute " + mute_cmd)
         self.sendApiCmd("volume", mute_cmd)
 
+    """
+        btn_repeat(channel)
+        This method is fired by an event handler setup for the input on this button.
+    """
     def btn_repeat(self, channel):
-        print("Repeat")
+        logging.info("Button: Repeat")
         self.sendApiCmd("repeat", True)
 
+    """
+        btn_prev(channel)
+        This method is fired by an event handler setup for the input on this button.
+    """
     def btn_prev(self, channel):
-        print("Previous")
+        logging.info("Button: Previous")
         self.sendApiCmd("prev")
 
+    """
+        btn_playpause(channel)
+        This method is fired by an event handler setup for the input on this button.
+    """
     def btn_playpause(self, channel):
-        print("Play / Pause")
+        logging.info("Button: Play/Pause")
         self.sendApiCmd("toggle")
         self.displayOn()
 
+    """
+        btn_next(channel)
+        This method is fired by an event handler setup for the input on this button.
+    """
     def btn_next(self, channel):
-        print("Next")
+        logging.info("Button: Next")
         self.sendApiCmd("next")
 
+    """
+        btn_random(channel)
+        This method is fired by an event handler setup for the input on this button.
+    """
     def btn_random(self, channel):
-        print("Random")
+        logging.info("Button: Random")
         self.sendApiCmd("random", True)
 
-    # SEek Song
-    ###########################################################################
+    """
+        seekSong(song_len, seek)
+
+    """
     def seekSong(self, song_len, seek):
         if self.seeking:
             return
@@ -137,10 +181,12 @@ class RaspiMusic:
         cmd =  "mpc seek "+ str(seek) + "%"
         os.system(cmd)
         self.seeking = True
-        # self.seekRun = 1
-        print("Command: %s" % (cmd))
-        #print("SongLen: {%d}, Seek: {%d}" % (song_len, song_seek))
+        logging.info("Seeking to: " + str(seek))
 
+    """
+        motorLeft()
+        Set the direction of the motor, wait then shut off motor
+    """
     def motorLeft(self):
         GPIO.output(self.pin_in1, False)
         GPIO.output(self.pin_in2, True)
@@ -148,6 +194,10 @@ class RaspiMusic:
         self.motorOff()
         #GPIO.output(self.pin_en, True)
 
+    """
+        motorRight()
+        Set the direction of the motor, wait then shut off motor
+    """
     def motorRight(self):
         GPIO.output(self.pin_in1, True)
         GPIO.output(self.pin_in2, False)
@@ -155,14 +205,27 @@ class RaspiMusic:
         self.motorOff()
         #GPIO.output(self.pin_en, True)
 
+    """
+        motorOff()
+        Set motor inputs to OFF. 
+    """
     def motorOff(self):
         GPIO.output(self.pin_in1, False)
         GPIO.output(self.pin_in2, False)
         #GPIO.output(self.pin_en, False)
 
+    """
+        motorSet()
+        Change the duty cycle of the pwm pin for motor speed.
+    """
     def motorSet(self, val):
         self.pwm.ChangeDutyCycle(val)
 
+    """
+        fadeTouch()
+        Check if fader capacitive touch has been activated and 
+        return boolean value.
+    """
     def fadeTouch(self):
         if self.cap[1].value:
             self.displayOn()
@@ -170,7 +233,10 @@ class RaspiMusic:
 
         return False
 
-    # Send API Command to Volumio Server
+    """
+        sendApiCmd(cmd, arg(optional))
+        Format REST API command and send it!
+    """
     def sendApiCmd(self, cmd, arg=None):
         api_host = "http://" + self.host + self.port
 
@@ -188,9 +254,14 @@ class RaspiMusic:
         if resp.status_code != 200:
             print("Error!!! This didnt happen: ", api_url)
 
-        #logging.info("sendApiCmd: {} {}".format(api_url, resp.status_code))
+        logging.info("sendApiCmd: {} {}".format(api_url, resp.status_code))
         return resp
 
+    """
+        setVolume(volume)
+        Return if system is muted. If dimmed, get appropriate dim value. Send
+        the volume value via REST API
+    """
     def setVolume(self, volume):
         if self.vstate['mute']:
             return
@@ -198,10 +269,20 @@ class RaspiMusic:
             volume = self.getDimAmount()
         self.sendApiCmd("volume", volume)
     
+    """
+        getDimAmount()
+        Get the current value from the volume knob and do the math 
+        to set new volume reduction by self.dimAmount %
+    """
     def getDimAmount(self):
         cur_vol = self.getVolumeKnob()
         return cur_vol - ((self.dim_amount * cur_vol) / 100)
 
+    """
+        getFaderPos()
+        Read raw value from MCP chip and subtract from last read. If greater than 500 in difference,
+        interpolate and save as last read. If less than 500, interpolate and return. 
+    """
     def getFaderPos(self):
         fad_raw = AnalogIn(self.mcp, MCP.P1).value
         adjust_val = abs(fad_raw - self.last_raw_fad)
@@ -213,13 +294,15 @@ class RaspiMusic:
 
         return fad    
 
-    # Read values from volume knob
-    # We do some trickery here by storing the last good reading from the pot
-    # then checking to see if it has changed beyond a threshold. If it has, then
-    # we return a good value. Otherwise, we return the last good reading. 
-    # This is done because the readings are jittery coming from the pot and fluctuate
-    # +- ~400 in either direction. The threshold of 500 is not noticable and gives us
-    # a nice padding.
+    """
+        Read values from volume knob
+        We do some trickery here by storing the last good reading from the pot
+        then checking to see if it has changed beyond a threshold. If it has, then
+        we return a good value. Otherwise, we return the last good reading. 
+        This is done because the readings are jittery coming from the pot and fluctuate
+        +- ~400 in either direction. The threshold of 500 is not noticable and gives us
+        a nice padding.
+    """
     def getVolumeKnob(self):
         vol_raw = AnalogIn(self.mcp, MCP.P0).value
         adjust_val = abs(vol_raw - self.last_raw_vol)
@@ -230,7 +313,10 @@ class RaspiMusic:
             vol = int(np.interp(self.last_raw_vol, self.vol_raw_range, self.vol_real_range))
 
         return vol
-
+    """
+        getSongPos()
+        Get position from API read state. 
+    """
     def getSongPos(self):
         cur_pos = self.vstate['seek']
         if cur_pos:
@@ -241,6 +327,10 @@ class RaspiMusic:
 
         return pos
 
+    """
+        getState()
+        Get data from REST API and set vstate dictionary. 
+    """
     def getState(self):
         # print("GetStatus")
         state = self.sendApiCmd("getState")
@@ -262,21 +352,30 @@ class RaspiMusic:
             self.seekRun = 0
             self.seeking = False
 
-        #print(state.json())
-        print("SeekRun: {%d}" % (self.seekRun))
-
+    """
+        getMuteSwitch()
+        Read GPIO input for mute switch and return boolean
+    """
     def getMuteSwitch(self):
         if GPIO.input(16) == GPIO.HIGH:
             return True
         else:
             return False
 
+    """
+        getDimSwitch()
+        Read GPIO input for dim switch and return boolean
+    """
     def getDimSwitch(self):
         if GPIO.input(26) == GPIO.HIGH:
             return True
         else:
             return False
 
+    """
+        displayOn()
+        Run xset command to turn display on. 
+    """
     def displayOn(self):
         if not self.xsetRun:
             os.system("xset -display :0 s reset dpms force on")
@@ -307,7 +406,6 @@ class RaspiMusic:
         fader_pos = self.getFaderPos()
         song_pos = self.getSongPos()
         diff = abs(song_pos - fader_pos)
-        #print("Diff: %d (%s)" % (diff, self.vstate['status']))
 
         # Turn off motor controller when touched.
         while self.fadeTouch():
@@ -317,19 +415,6 @@ class RaspiMusic:
 
         if self.seekRun > 1 and diff >= 10:
             self.seekSong(self.vstate['duration'], fader_pos)
-
-        # - Best so far...
-        # if self.fadeTouch() and diff >= 10:
-        #     if self.seekRun == 0:
-        #         print("seeek")
-        #         self.seekSong(self.vstate['duration'], fader_pos)
-        #         self.seekRun =+ 1
-
-        # elif self.fadeTouch():
-        #     GPIO.output(self.pin_en, GPIO.LOW)
-        #     print("Touch")
-        # else:
-        #     GPIO.output(self.pin_en, GPIO.HIGH)
 
         # Set Speed
         if diff >= 10:
@@ -345,26 +430,4 @@ class RaspiMusic:
             elif song_pos <= fader_pos:
                 self.motorLeft()
 
-        # print("vol: {%d/%d}, mute: {%r/%r}, dim: {%r/%r}, song/fad: {%d/%d} Difference: {%d}" % (
-        #     vol,
-        #     self.vstate['volume'],
-        #     mute_switch,
-        #     self.vstate['mute'],
-        #     dim_switch,
-        #     self.vstate['dim'],
-        #     song_pos,
-        #     fader_pos,
-        #     diff
-        # ))
 
-        return 
-        # Set Speed 
-        if abs(song_pos - fader_pos) >= 10:
-            self.pwm.ChangeDutyCycle(90)
-        else:
-            self.pwm.ChangeDutyCycle(55)
-
-
-
-        #self.motorLeft()
-        #self.motorOff()

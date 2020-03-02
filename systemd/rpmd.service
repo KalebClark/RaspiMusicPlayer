@@ -1,0 +1,13 @@
+[Unit]
+Description=Volumio Hardware Control Daemon
+
+[Service]
+ExecStart=/home/volumio/.pyenv/shims/python io_test.py
+WorkingDirectory=/home/volumio/RaspiMusicPlayer/
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=volumio
+
+[Install]
+WantedBy=multi-user.target
